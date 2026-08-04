@@ -1,134 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dracula Diff Viewer</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dracula Universal Diff Viewer</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
 <style>
 :root{
 --bg:#282A36;--panel:#21222C;--border:#44475A;--text:#F8F8F2;
---muted:#6272A4;--accent:#BD93F9;--cyan:#8BE9FD;
+--accent:#BD93F9;--cyan:#8BE9FD;
 }
 *{box-sizing:border-box}
 body{
-margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text);
-background:
-radial-gradient(circle at top left,#3c3267 0%,transparent 35%),
-radial-gradient(circle at bottom right,#26385c 0%,transparent 35%),
-var(--bg);
+margin:0;font-family:Segoe UI,Arial,sans-serif;color:var(--text);
+background:#282A36;
+background-image:radial-gradient(circle at top left,#45356f 0,transparent 30%),radial-gradient(circle at bottom right,#21475b 0,transparent 30%);
 }
-.container{max-width:1500px;margin:auto;padding:30px}
-.toolbar{display:flex;gap:20px;flex-wrap:wrap;background:rgba(33,34,44,.95);
-border:1px solid var(--border);padding:20px;border-radius:18px;
-box-shadow:0 10px 30px rgba(0,0,0,.4)}
-.card{flex:1;min-width:260px}
-.card h3{margin:0 0 10px;color:var(--accent)}
-input[type=file]{width:100%;padding:16px;background:#303341;color:white;
-border:2px dashed var(--border);border-radius:12px}
+.container{max-width:1600px;margin:auto;padding:20px}
+.toolbar{
+display:grid;
+grid-template-columns:1fr 1fr 170px;
+gap:14px;
+align-items:center;
+margin-bottom:18px;
+}
+.drop{
+display:flex;
+align-items:center;
+gap:12px;
+height:72px;
+padding:12px 18px;
+border:2px dashed var(--border);
+border-radius:14px;
+background:#21222C;
+cursor:pointer;
+transition:.2s;
+overflow:hidden;
+}
+.drop:hover,.drop.dragging{
+border-color:var(--cyan);
+background:#303241;
+box-shadow:0 0 20px rgba(139,233,253,.25);
+}
+.icon{font-size:30px}
+.meta{display:flex;flex-direction:column;overflow:hidden}
+.title{font-weight:600}
+.file{font-size:12px;color:#8BE9FD;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+input{display:none}
 button{
-padding:14px 26px;border:none;border-radius:12px;cursor:pointer;
-background:linear-gradient(135deg,#BD93F9,#8BE9FD);font-weight:bold;
+height:72px;border:none;border-radius:14px;
+background:linear-gradient(135deg,#BD93F9,#8BE9FD);
+font-weight:700;font-size:16px;cursor:pointer;
 }
-#editor{margin-top:25px;height:80vh;border-radius:18px;overflow:hidden;
-border:1px solid var(--border)}
-h1{font-weight:700}
-.note{color:var(--muted);margin-bottom:18px}
+#editor{height:78vh;border:1px solid var(--border);border-radius:14px;overflow:hidden}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 </head>
 <body>
 <div class="container">
-<h1>🦇 Dracula Git Diff Viewer</h1>
-<div class="note">Upload two files to compare them side by side using Monaco Diff Editor.</div>
+<h2>🦇 Dracula Universal Diff Viewer</h2>
+
 <div class="toolbar">
-<div class="card">
-<h3>Original</h3>
+<label class="drop" id="oldCard">
+<div class="icon">📄</div>
+<div class="meta"><div class="title">Original File</div><div id="oldName" class="file">Drop or click to browse</div></div>
 <input id="oldFile" type="file">
-</div>
-<div class="card">
-<h3>Modified</h3>
+</label>
+
+<label class="drop" id="newCard">
+<div class="icon">📄</div>
+<div class="meta"><div class="title">Modified File</div><div id="newName" class="file">Drop or click to browse</div></div>
 <input id="newFile" type="file">
+</label>
+
+<button id="compare">Compare</button>
 </div>
-<div style="display:flex;align-items:end">
-<button id="compare">Compare Files</button>
-</div>
-</div>
+
 <div id="editor"></div>
 </div>
+
 <script>
 let diffEditor;
-require.config({
-paths:{
-vs:'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'
+require.config({paths:{vs:'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'}});
+require(['vs/editor/editor.main'],()=>{
+ monaco.editor.defineTheme('dracula',{base:'vs-dark',inherit:true,rules:[],colors:{
+ 'editor.background':'#282A36',
+ 'editor.foreground':'#F8F8F2',
+ 'editorLineNumber.foreground':'#6272A4',
+ 'diffEditor.insertedTextBackground':'#214D38AA',
+ 'diffEditor.removedTextBackground':'#4A232BAA'
+ }});
+ diffEditor=monaco.editor.createDiffEditor(document.getElementById('editor'),{
+ theme:'dracula',automaticLayout:true,renderSideBySide:true,readOnly:true,minimap:{enabled:false}
+ });
+});
+
+function attach(card,input,label){
+ card.onclick=()=>input.click();
+ input.onchange=()=>{if(input.files[0])label.textContent=input.files[0].name;}
+ ['dragenter','dragover'].forEach(e=>card.addEventListener(e,ev=>{
+   ev.preventDefault();ev.stopPropagation();card.classList.add('dragging');
+ }));
+ ['dragleave','dragend','drop'].forEach(e=>card.addEventListener(e,ev=>{
+   ev.preventDefault();ev.stopPropagation();card.classList.remove('dragging');
+ }));
+ card.addEventListener('drop',ev=>{
+   const files=ev.dataTransfer.files;
+   if(!files.length)return;
+   const dt=new DataTransfer();
+   dt.items.add(files[0]);
+   input.files=dt.files;
+   label.textContent=files[0].name;
+ });
 }
-});
+['dragover','drop'].forEach(e=>window.addEventListener(e,x=>{x.preventDefault();}));
 
-require(['vs/editor/editor.main'],function(){
+attach(oldCard,oldFile,oldName);
+attach(newCard,newFile,newName);
 
-monaco.editor.defineTheme('dracula',{
-base:'vs-dark',
-inherit:true,
-rules:[
-{token:'comment',foreground:'6272A4'},
-{token:'keyword',foreground:'FF79C6'},
-{token:'string',foreground:'F1FA8C'},
-{token:'number',foreground:'BD93F9'},
-{token:'type',foreground:'8BE9FD'}
-],
-colors:{
-'editor.background':'#282A36',
-'editor.foreground':'#F8F8F2',
-'editorLineNumber.foreground':'#6272A4',
-'editor.selectionBackground':'#44475A',
-'editor.lineHighlightBackground':'#44475A66',
-'diffEditor.insertedTextBackground':'#214D38AA',
-'diffEditor.removedTextBackground':'#4A232BAA',
-'diffEditor.insertedLineBackground':'#214D3844',
-'diffEditor.removedLineBackground':'#4A232B44'
+async function readUniversal(file){
+ let ext=file.name.split('.').pop().toLowerCase();
+ if(ext==='xlsx'||ext==='xls'){
+   const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+   let out='';
+   wb.SheetNames.forEach(n=>{
+     out+='===== '+n+' =====\n';
+     out+=XLSX.utils.sheet_to_csv(wb.Sheets[n])+'\n';
+   });
+   return out;
+ }
+ return await file.text();
 }
-});
-
-diffEditor=monaco.editor.createDiffEditor(document.getElementById('editor'),{
-theme:'dracula',
-automaticLayout:true,
-renderSideBySide:true,
-readOnly:true,
-renderIndicators:true,
-ignoreTrimWhitespace:false,
-minimap:{enabled:false}
-});
-});
-
-async function read(f){return await f.text();}
-
 function lang(name){
-const ext=(name.split('.').pop()||'').toLowerCase();
-const m={
-js:'javascript',ts:'typescript',tsx:'typescript',jsx:'javascript',
-json:'json',html:'html',css:'css',scss:'scss',
-py:'python',java:'java',cpp:'cpp',c:'c',cs:'csharp',
-go:'go',rs:'rust',php:'php',xml:'xml',yaml:'yaml',
-yml:'yaml',sql:'sql',md:'markdown',sh:'shell',
-txt:'plaintext'
-};
-return m[ext]||'plaintext';
+ const e=(name.split('.').pop()||'').toLowerCase();
+ const m={js:'javascript',ts:'typescript',json:'json',html:'html',css:'css',py:'python',java:'java',cpp:'cpp',c:'c',xml:'xml',md:'markdown'};
+ return m[e]||'plaintext';
 }
-
-document.getElementById('compare').onclick=async()=>{
-const f1=document.getElementById('oldFile').files[0];
-const f2=document.getElementById('newFile').files[0];
-if(!f1||!f2){
-alert('Please choose both files.');
-return;
-}
-const t1=await read(f1);
-const t2=await read(f2);
-const language=lang(f1.name);
-
-const original=monaco.editor.createModel(t1,language);
-const modified=monaco.editor.createModel(t2,language);
-
-diffEditor.setModel({original,modified});
+compare.onclick=async()=>{
+ if(!oldFile.files[0]||!newFile.files[0]) return alert('Select both files.');
+ const a=await readUniversal(oldFile.files[0]);
+ const b=await readUniversal(newFile.files[0]);
+ diffEditor.setModel({
+   original:monaco.editor.createModel(a,lang(oldFile.files[0].name)),
+   modified:monaco.editor.createModel(b,lang(newFile.files[0].name))
+ });
 };
 </script>
 </body>
